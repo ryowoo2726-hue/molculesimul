@@ -107,7 +107,9 @@ public sealed class SimpleOrbitCamera : MonoBehaviour
     private void SmoothPose()
     {
         var t = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
-        target = Vector3.Lerp(target, GetPrimaryAtomCenter(), t);
+        if (!AtomDragController.IsDraggingAnyAtom)
+            target = Vector3.Lerp(target, GetPrimaryAtomCenter(), t);
+
         yaw = Mathf.LerpAngle(yaw, targetYaw, t);
         pitch = Mathf.Lerp(pitch, targetPitch, t);
         distance = Mathf.Lerp(distance, targetDistance, t);

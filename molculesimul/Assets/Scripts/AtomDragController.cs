@@ -3,6 +3,8 @@ using UnityEngine.EventSystems;
 
 public sealed class AtomDragController : MonoBehaviour
 {
+    public static bool IsDraggingAnyAtom { get; private set; }
+
     [SerializeField] private Camera targetCamera;
     [SerializeField] private MoleculeWorkspace workspace;
     [SerializeField] private MoleculeRecognizer recognizer;
@@ -22,6 +24,12 @@ public sealed class AtomDragController : MonoBehaviour
     {
         if (targetCamera == null)
             targetCamera = Camera.main;
+    }
+
+    private void OnDisable()
+    {
+        if (dragging)
+            IsDraggingAnyAtom = false;
     }
 
     private void Update()
@@ -51,6 +59,7 @@ public sealed class AtomDragController : MonoBehaviour
         selected = null;
         dragGroup.Clear();
         dragging = false;
+        IsDraggingAnyAtom = false;
         activeFingerId = -1;
         RefreshRecognition();
     }
@@ -74,6 +83,7 @@ public sealed class AtomDragController : MonoBehaviour
         selected = hitAtom;
         selected.SetSelected(true);
         dragging = true;
+        IsDraggingAnyAtom = true;
         dragGroup = selected == workspace.PrimaryAtom
             ? workspace.GetConnectedAtoms(selected)
             : new System.Collections.Generic.List<AtomParticle> { selected };
@@ -121,6 +131,7 @@ public sealed class AtomDragController : MonoBehaviour
         workspace.TryCreateNearbyBonds(selected);
 
         dragging = false;
+        IsDraggingAnyAtom = false;
         activeFingerId = -1;
         RefreshRecognition();
     }
