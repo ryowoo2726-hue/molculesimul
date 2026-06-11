@@ -1,0 +1,39 @@
+# Unity generated folders
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+
+# Unity cache and generated files
+*.csproj
+*.sln
+*.slnx
+*.user
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+sysinfo.txt
+
+# Crash reports
+*.stackdump
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vs/
+.vscode/
+
+# Old scratch folders from early scaffolding; the real Unity project is /molculesimul.
+/Assets/
+/New Unity Project/
+
+# Keep generated WebGL pages if intentionally built under docs/webgl.
+!docs/
+!docs/**
