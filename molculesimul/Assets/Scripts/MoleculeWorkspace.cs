@@ -16,6 +16,7 @@ public sealed class MoleculeWorkspace : MonoBehaviour
     public IReadOnlyList<BondView> Bonds => bonds;
     public float BondDistance => bondDistance;
     public int MaxAtoms => maxAtoms;
+    public AtomParticle PrimaryAtom => atoms.Count > 0 ? atoms[0] : null;
 
     public AtomParticle RegisterAtom(AtomParticle atom)
     {
@@ -71,6 +72,22 @@ public sealed class MoleculeWorkspace : MonoBehaviour
         return true;
     }
 
+    public int TryCreateNearbyBonds(AtomParticle source)
+    {
+        var created = 0;
+        var connected = new HashSet<AtomParticle>(GetConnectedAtoms(source));
+        foreach (var candidate in FindBondCandidates(source))
+        {
+            if (connected.Contains(candidate))
+                continue;
+
+            if (TryCreateBond(source, candidate))
+                created++;
+        }
+
+        return created;
+    }
+
     public void DeleteBond(AtomParticle a, AtomParticle b)
     {
         for (var i = bonds.Count - 1; i >= 0; i--)
@@ -119,6 +136,75 @@ public sealed class MoleculeWorkspace : MonoBehaviour
         }
 
         return best;
+    }
+
+    public List<AtomParticle> FindBondCandidates(AtomParticle source)
+    {
+        var candidates = new List<AtomParticle>();
+
+        foreach (var atom in atoms)
+        {
+            if (atom == source || HasBond(source, atom))
+                continue;
+
+            if (Vector3.Distance(source.transform.position, atom.transform.position) <= bondDistance)
+                candidates.Add(atom);
+        }
+
+        candidates.Sort((a, b) =>
+            Vector3.Distance(source.transform.position, a.transform.position)
+                .CompareTo(Vector3.Distance(source.transform.position, b.transform.position)));
+
+        return candidates;
+    }
+
+    public List<AtomParticle> GetConnectedAtoms(AtomParticle source)
+    {
+        var result = new List<AtomParticle>();
+        if (source == null || !atoms.Contains(source))
+            return result;
+
+        var visited = new HashSet<AtomParticle>();
+        var stack = new Stack<AtomParticle>();
+        stack.Push(source);
+        visited.Add(source);
+
+        while (stack.Count > 0)
+        {
+            var atom = stack.Pop();
+            result.Add(atom);
+
+            foreach (var bond in bonds)
+            {
+                AtomParticle next = null;
+                if (bond.A == atom)
+                    next = bond.B;
+                else if (bond.B == atom)
+                    next = bond.A;
+
+                if (next == null || visited.Contains(next))
+                    continue;
+
+                visited.Add(next);
+                stack.Push(next);
+            }
+        }
+
+        return result;
+    }
+
+    public int CountBondsWithin(IReadOnlyList<AtomParticle> group)
+    {
+        var groupSet = new HashSet<AtomParticle>(group);
+        var count = 0;
+
+        foreach (var bond in bonds)
+        {
+            if (groupSet.Contains(bond.A) && groupSet.Contains(bond.B))
+                count++;
+        }
+
+        return count;
     }
 
     public void ApplyLayout(MoleculeMatch match)

@@ -12,7 +12,9 @@ public sealed class AtomDragController : MonoBehaviour
     [SerializeField] private float bondBreakMultiplier = 1.8f;
 
     private AtomParticle selected;
+    private System.Collections.Generic.List<AtomParticle> dragGroup = new System.Collections.Generic.List<AtomParticle>();
     private Vector3 dragOffset;
+    private Vector3 lastDragPosition;
     private bool dragging;
     private int activeFingerId = -1;
 
@@ -47,6 +49,7 @@ public sealed class AtomDragController : MonoBehaviour
 
         workspace.DeleteAtom(selected);
         selected = null;
+        dragGroup.Clear();
         dragging = false;
         activeFingerId = -1;
         RefreshRecognition();
@@ -71,9 +74,15 @@ public sealed class AtomDragController : MonoBehaviour
         selected = hitAtom;
         selected.SetSelected(true);
         dragging = true;
+        dragGroup = selected == workspace.PrimaryAtom
+            ? workspace.GetConnectedAtoms(selected)
+            : new System.Collections.Generic.List<AtomParticle> { selected };
 
         if (TryGetPointOnDragPlane(screenPosition, out var point))
+        {
             dragOffset = selected.transform.position - point;
+            lastDragPosition = selected.transform.position;
+        }
     }
 
     private void BeginDrag(Touch touch)
@@ -91,8 +100,15 @@ public sealed class AtomDragController : MonoBehaviour
         if (selected == null || !dragging)
             return;
 
-        if (TryGetPointOnDragPlane(screenPosition, out var point))
-            selected.transform.position = point + dragOffset;
+        if (!TryGetPointOnDragPlane(screenPosition, out var point))
+            return;
+
+        var targetPosition = point + dragOffset;
+        var delta = targetPosition - lastDragPosition;
+        foreach (var atom in dragGroup)
+            atom.transform.position += delta;
+
+        lastDragPosition = targetPosition;
     }
 
     private void EndDrag()
@@ -102,9 +118,7 @@ public sealed class AtomDragController : MonoBehaviour
 
         workspace.DeleteDistantBonds(selected, workspace.BondDistance * bondBreakMultiplier);
 
-        var candidate = workspace.FindNearestBondCandidate(selected);
-        if (candidate != null)
-            workspace.TryCreateBond(selected, candidate);
+        workspace.TryCreateNearbyBonds(selected);
 
         dragging = false;
         activeFingerId = -1;
@@ -146,12 +160,16 @@ public sealed class AtomDragController : MonoBehaviour
 
     private void RefreshRecognition()
     {
-        var match = recognizer.FindMatch(workspace);
+        var focusAtoms = selected != null ? workspace.GetConnectedAtoms(selected) : workspace.Atoms;
+        if (focusAtoms.Count == 0)
+            focusAtoms = new System.Collections.Generic.List<AtomParticle>(workspace.Atoms);
+
+        var match = recognizer.FindMatch(workspace, focusAtoms);
         if (match != null)
             workspace.ApplyLayout(match);
 
         if (statusView != null)
-            statusView.Show(match, workspace.Atoms.Count, workspace.Bonds.Count);
+            statusView.Show(match, focusAtoms.Count, workspace.CountBondsWithin(focusAtoms));
     }
 
     private bool TryGetPointOnDragPlane(Vector2 screenPosition, out Vector3 point)

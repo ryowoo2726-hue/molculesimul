@@ -30,7 +30,11 @@ public sealed class MoleculeRecognizer : MonoBehaviour
 
     public MoleculeMatch FindMatch(MoleculeWorkspace workspace)
     {
-        var atoms = workspace.Atoms;
+        return FindMatch(workspace, workspace.Atoms);
+    }
+
+    public MoleculeMatch FindMatch(MoleculeWorkspace workspace, IReadOnlyList<AtomParticle> atoms)
+    {
         if (atoms.Count == 0 || database == null || database.molecules == null)
             return null;
 

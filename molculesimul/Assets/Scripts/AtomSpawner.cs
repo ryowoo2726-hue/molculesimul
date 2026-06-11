@@ -7,7 +7,7 @@ public sealed class AtomSpawner : MonoBehaviour
     [SerializeField] private AtomParticle atomPrefab;
     [SerializeField] private Transform spawnRoot;
     [SerializeField] private Vector3 spawnCenter = new Vector3(0f, 1f, 0f);
-    [SerializeField] private float spawnSpread = 1.5f;
+    [SerializeField] private float spawnSpread = 0.9f;
 
     public void Spawn(string symbol)
     {
@@ -17,14 +17,15 @@ public sealed class AtomSpawner : MonoBehaviour
         if (!elementLibrary.TryGet(symbol, out var element))
             return;
 
+        var center = workspace.PrimaryAtom != null ? workspace.PrimaryAtom.transform.position : spawnCenter;
         var offset = new Vector3(
             Random.Range(-spawnSpread, spawnSpread),
             Random.Range(-0.25f, 0.25f),
             Random.Range(-spawnSpread, spawnSpread));
 
         var atom = atomPrefab != null
-            ? Instantiate(atomPrefab, spawnCenter + offset, Quaternion.identity, spawnRoot)
-            : CreateFallbackAtom(spawnCenter + offset);
+            ? Instantiate(atomPrefab, center + offset, Quaternion.identity, spawnRoot)
+            : CreateFallbackAtom(center + offset);
 
         atom.Initialize(workspace.GetNextAtomId(), element);
         workspace.RegisterAtom(atom);
