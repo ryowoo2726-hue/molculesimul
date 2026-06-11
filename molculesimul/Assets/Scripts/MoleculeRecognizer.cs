@@ -41,6 +41,9 @@ public sealed class MoleculeRecognizer : MonoBehaviour
             if (definition.atoms == null || definition.atoms.Length != atoms.Count)
                 continue;
 
+            if (!HasSameAtomCounts(definition, atoms))
+                continue;
+
             var definitionAdjacency = BuildDefinitionAdjacency(definition);
             var mapping = new int[definition.atoms.Length];
             for (var i = 0; i < mapping.Length; i++)
@@ -62,6 +65,32 @@ public sealed class MoleculeRecognizer : MonoBehaviour
         }
 
         return null;
+    }
+
+    private static bool HasSameAtomCounts(MoleculeDefinition definition, IReadOnlyList<AtomParticle> atoms)
+    {
+        var counts = new Dictionary<string, int>();
+        foreach (var atom in atoms)
+        {
+            if (!counts.ContainsKey(atom.Symbol))
+                counts[atom.Symbol] = 0;
+            counts[atom.Symbol]++;
+        }
+
+        foreach (var symbol in definition.atoms)
+        {
+            if (!counts.TryGetValue(symbol, out var count) || count == 0)
+                return false;
+            counts[symbol] = count - 1;
+        }
+
+        foreach (var pair in counts)
+        {
+            if (pair.Value != 0)
+                return false;
+        }
+
+        return true;
     }
 
     private static bool TryMap(
