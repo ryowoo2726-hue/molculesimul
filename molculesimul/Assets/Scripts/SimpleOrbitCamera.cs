@@ -20,11 +20,18 @@ public sealed class SimpleOrbitCamera : MonoBehaviour
     private float targetYaw;
     private float targetPitch;
     private bool rotating;
+    private bool touchRotating;
+    private bool leftMouseRotating;
+    private Camera orbitCamera;
 
     private void Start()
     {
         if (workspace == null)
             workspace = FindObjectOfType<MoleculeWorkspace>();
+
+        orbitCamera = GetComponent<Camera>();
+        if (orbitCamera == null)
+            orbitCamera = Camera.main;
 
         targetDistance = distance;
         targetYaw = yaw;
@@ -40,6 +47,8 @@ public sealed class SimpleOrbitCamera : MonoBehaviour
         }
         else
         {
+            HandleSinglePointerOrbit();
+
             if (Input.GetMouseButtonDown(1))
             {
                 rotating = !IsPointerOverUi();
@@ -66,10 +75,57 @@ public sealed class SimpleOrbitCamera : MonoBehaviour
         SmoothPose();
     }
 
+    private void HandleSinglePointerOrbit()
+    {
+        if (Input.touchCount == 1)
+        {
+            var touch = Input.GetTouch(0);
+            if (touch.phase == TouchPhase.Began)
+            {
+                touchRotating = !IsTouchOverUi(touch.fingerId) && !IsWorldControlAt(touch.position);
+                lastPointer = touch.position;
+                return;
+            }
+
+            if (touchRotating && (touch.phase == TouchPhase.Moved || touch.phase == TouchPhase.Stationary))
+            {
+                var pointer = touch.position;
+                var delta = pointer - lastPointer;
+                lastPointer = pointer;
+                Orbit(delta, 0.8f);
+            }
+
+            if (touch.phase == TouchPhase.Ended || touch.phase == TouchPhase.Canceled)
+                touchRotating = false;
+
+            return;
+        }
+
+        touchRotating = false;
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            leftMouseRotating = !IsPointerOverUi() && !IsWorldControlAt(Input.mousePosition);
+            lastPointer = Input.mousePosition;
+        }
+
+        if (Input.GetMouseButton(0) && leftMouseRotating)
+        {
+            var pointer = (Vector2)Input.mousePosition;
+            var delta = pointer - lastPointer;
+            lastPointer = pointer;
+            Orbit(delta, 1f);
+        }
+
+        if (Input.GetMouseButtonUp(0))
+            leftMouseRotating = false;
+    }
+
     private void HandleTwoFingerTouch()
     {
         var a = Input.GetTouch(0);
         var b = Input.GetTouch(1);
+        touchRotating = false;
         if (IsTouchOverUi(a.fingerId) || IsTouchOverUi(b.fingerId))
             return;
 
@@ -107,21 +163,23 @@ public sealed class SimpleOrbitCamera : MonoBehaviour
     private void SmoothPose()
     {
         var t = 1f - Mathf.Exp(-smoothing * Time.deltaTime);
-        if (!AtomDragController.IsDraggingAnyAtom)
-            target = Vector3.Lerp(target, GetPrimaryAtomCenter(), t);
-
+        target = Vector3.Lerp(target, GetMoleculeCenter(), t);
         yaw = Mathf.LerpAngle(yaw, targetYaw, t);
         pitch = Mathf.Lerp(pitch, targetPitch, t);
         distance = Mathf.Lerp(distance, targetDistance, t);
         ApplyPose();
     }
 
-    private Vector3 GetPrimaryAtomCenter()
+    private Vector3 GetMoleculeCenter()
     {
         if (workspace == null || workspace.Atoms.Count == 0)
             return Vector3.zero;
 
-        return workspace.Atoms[0].transform.position;
+        var center = Vector3.zero;
+        foreach (var atom in workspace.Atoms)
+            center += atom.transform.position;
+
+        return center / workspace.Atoms.Count;
     }
 
     private void ApplyPose()
@@ -129,6 +187,19 @@ public sealed class SimpleOrbitCamera : MonoBehaviour
         var rotation = Quaternion.Euler(pitch, yaw, 0f);
         transform.position = target + rotation * new Vector3(0f, 0f, -distance);
         transform.LookAt(target, Vector3.up);
+    }
+
+    private bool IsWorldControlAt(Vector2 screenPosition)
+    {
+        if (orbitCamera == null)
+            return false;
+
+        var ray = orbitCamera.ScreenPointToRay(screenPosition);
+        if (!Physics.Raycast(ray, out var hit, 100f))
+            return false;
+
+        return hit.collider.GetComponentInParent<AttachmentSlot>() != null ||
+               hit.collider.GetComponentInParent<AtomParticle>() != null;
     }
 
     private static bool IsPointerOverUi()

@@ -14,6 +14,7 @@ public static class MoleculeSceneBuilder
     private const string ScenePath = "Assets/Scenes/MoleculeSimulator.unity";
     private const string AtomPrefabPath = "Assets/Prefabs/AtomPrefab.prefab";
     private const string BondPrefabPath = "Assets/Prefabs/BondPrefab.prefab";
+    private const string SlotPrefabPath = "Assets/Prefabs/AttachmentSlotPrefab.prefab";
     private const string KoreanFontPath = "Assets/Fonts/NotoSansKR-VF.ttf";
 
     [MenuItem("Tools/Molecule Simulator/Build Complete Scene")]
@@ -22,6 +23,7 @@ public static class MoleculeSceneBuilder
         EnsureFolders();
         var atomPrefab = CreateAtomPrefab();
         var bondPrefab = CreateBondPrefab();
+        var slotPrefab = CreateSlotPrefab();
 
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         SceneManager.SetActiveScene(scene);
@@ -36,23 +38,34 @@ public static class MoleculeSceneBuilder
         var recognizer = workspaceObject.AddComponent<MoleculeRecognizer>();
         var spawner = workspaceObject.AddComponent<AtomSpawner>();
         var dragger = workspaceObject.AddComponent<AtomDragController>();
+        var builder = workspaceObject.AddComponent<MoleculeBuilderController>();
         var controls = workspaceObject.AddComponent<WorkspaceControls>();
 
         var atomRoot = new GameObject("Atoms").transform;
+        var slotRoot = new GameObject("AttachmentSlots").transform;
         var canvas = CreateCanvas();
         var statusView = CreateStatusPanel(canvas.transform);
 
         SetField(workspace, "bondPrefab", bondPrefab);
         SetField(spawner, "elementLibrary", elementLibrary);
         SetField(spawner, "workspace", workspace);
+        SetField(spawner, "builderController", builder);
         SetField(spawner, "atomPrefab", atomPrefab);
         SetField(spawner, "spawnRoot", atomRoot);
         SetField(dragger, "targetCamera", camera);
         SetField(dragger, "workspace", workspace);
         SetField(dragger, "recognizer", recognizer);
         SetField(dragger, "statusView", statusView);
+        SetField(builder, "workspace", workspace);
+        SetField(builder, "spawner", spawner);
+        SetField(builder, "recognizer", recognizer);
+        SetField(builder, "statusView", statusView);
+        SetField(builder, "slotPrefab", slotPrefab);
+        SetField(builder, "slotRoot", slotRoot);
+        SetField(builder, "targetCamera", camera);
         SetField(camera.GetComponent<SimpleOrbitCamera>(), "workspace", workspace);
         SetField(controls, "workspace", workspace);
+        SetField(controls, "builderController", builder);
         SetField(controls, "statusView", statusView);
 
         CreateElementButtons(canvas.transform, spawner, elementLibrary);
@@ -129,6 +142,20 @@ public static class MoleculeSceneBuilder
         var prefab = PrefabUtility.SaveAsPrefabAsset(bond, BondPrefabPath);
         UnityEngine.Object.DestroyImmediate(bond);
         return prefab.GetComponent<BondView>();
+    }
+
+    private static AttachmentSlot CreateSlotPrefab()
+    {
+        var material = CreateUnlitMaterial("AttachmentSlot", new Color(0.35f, 0.75f, 1f, 0.72f));
+        var slot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        slot.name = "AttachmentSlotPrefab";
+        slot.transform.localScale = Vector3.one * 0.18f;
+        slot.GetComponent<MeshRenderer>().sharedMaterial = material;
+        var view = slot.AddComponent<AttachmentSlot>();
+        SetField(view, "targetRenderer", slot.GetComponent<MeshRenderer>());
+        var prefab = PrefabUtility.SaveAsPrefabAsset(slot, SlotPrefabPath);
+        UnityEngine.Object.DestroyImmediate(slot);
+        return prefab.GetComponent<AttachmentSlot>();
     }
 
     private static Camera CreateCamera()
@@ -279,7 +306,7 @@ public static class MoleculeSceneBuilder
 
     private static void CreateHintText(Transform parent)
     {
-        var hint = CreateText("HintText", parent, "원소 버튼으로 원자를 만들고, 원자를 끌어 가까이 놓으면 결합됩니다.", 20, FontStyle.Normal, TextAnchor.UpperRight);
+        var hint = CreateText("HintText", parent, "첫 원소를 만든 뒤 파란 결합 자리를 선택하고 다음 원소를 누르세요.", 20, FontStyle.Normal, TextAnchor.UpperRight);
         hint.color = new Color(0.9f, 0.94f, 0.98f, 0.86f);
         SetRect(hint.rectTransform, new Vector2(-24f, -24f), new Vector2(650f, 34f), new Vector2(1f, 1f), new Vector2(1f, 1f));
     }

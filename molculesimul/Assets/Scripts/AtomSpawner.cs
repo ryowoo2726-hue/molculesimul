@@ -4,12 +4,41 @@ public sealed class AtomSpawner : MonoBehaviour
 {
     [SerializeField] private ElementLibrary elementLibrary;
     [SerializeField] private MoleculeWorkspace workspace;
+    [SerializeField] private MoleculeBuilderController builderController;
     [SerializeField] private AtomParticle atomPrefab;
     [SerializeField] private Transform spawnRoot;
     [SerializeField] private Vector3 spawnCenter = new Vector3(0f, 1f, 0f);
     [SerializeField] private float spawnSpread = 0.9f;
 
     public void Spawn(string symbol)
+    {
+        if (builderController != null && builderController.enabled)
+        {
+            builderController.CreateFromElementButton(symbol);
+            return;
+        }
+
+        SpawnLegacy(symbol);
+    }
+
+    public AtomParticle SpawnAt(string symbol, Vector3 position)
+    {
+        if (!workspace.CanAddAtom())
+            return null;
+
+        if (!elementLibrary.TryGet(symbol, out var element))
+            return null;
+
+        var atom = atomPrefab != null
+            ? Instantiate(atomPrefab, position, Quaternion.identity, spawnRoot)
+            : CreateFallbackAtom(position);
+
+        atom.Initialize(workspace.GetNextAtomId(), element);
+        workspace.RegisterAtom(atom);
+        return atom;
+    }
+
+    private void SpawnLegacy(string symbol)
     {
         if (!workspace.CanAddAtom())
             return;

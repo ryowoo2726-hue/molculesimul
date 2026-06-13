@@ -11,16 +11,19 @@ public sealed class MoleculeWorkspace : MonoBehaviour
     private readonly List<AtomParticle> atoms = new List<AtomParticle>();
     private readonly List<BondView> bonds = new List<BondView>();
     private int nextAtomId = 1;
+    private int version;
 
     public IReadOnlyList<AtomParticle> Atoms => atoms;
     public IReadOnlyList<BondView> Bonds => bonds;
     public float BondDistance => bondDistance;
     public int MaxAtoms => maxAtoms;
     public AtomParticle PrimaryAtom => atoms.Count > 0 ? atoms[0] : null;
+    public int Version => version;
 
     public AtomParticle RegisterAtom(AtomParticle atom)
     {
         atoms.Add(atom);
+        version++;
         return atom;
     }
 
@@ -44,6 +47,7 @@ public sealed class MoleculeWorkspace : MonoBehaviour
 
         bonds.Clear();
         atoms.Clear();
+        version++;
     }
 
     public void DeleteAtom(AtomParticle atom)
@@ -59,6 +63,7 @@ public sealed class MoleculeWorkspace : MonoBehaviour
 
         atoms.Remove(atom);
         Destroy(atom.gameObject);
+        version++;
     }
 
     public bool TryCreateBond(AtomParticle a, AtomParticle b)
@@ -69,6 +74,7 @@ public sealed class MoleculeWorkspace : MonoBehaviour
         var bond = bondPrefab != null ? Instantiate(bondPrefab, transform) : CreateFallbackBond();
         bond.Initialize(a, b);
         bonds.Add(bond);
+        version++;
         return true;
     }
 
@@ -96,6 +102,7 @@ public sealed class MoleculeWorkspace : MonoBehaviour
             {
                 Destroy(bonds[i].gameObject);
                 bonds.RemoveAt(i);
+                version++;
                 return;
             }
         }
@@ -114,7 +121,42 @@ public sealed class MoleculeWorkspace : MonoBehaviour
 
             Destroy(bond.gameObject);
             bonds.RemoveAt(i);
+            version++;
         }
+    }
+
+    public int GetBondCount(AtomParticle atom)
+    {
+        var count = 0;
+        foreach (var bond in bonds)
+        {
+            if (bond.A == atom || bond.B == atom)
+                count++;
+        }
+
+        return count;
+    }
+
+    public List<Vector3> GetBondDirections(AtomParticle atom)
+    {
+        var directions = new List<Vector3>();
+        foreach (var bond in bonds)
+        {
+            AtomParticle other = null;
+            if (bond.A == atom)
+                other = bond.B;
+            else if (bond.B == atom)
+                other = bond.A;
+
+            if (other == null)
+                continue;
+
+            var direction = other.transform.position - atom.transform.position;
+            if (direction.sqrMagnitude > 0.001f)
+                directions.Add(direction.normalized);
+        }
+
+        return directions;
     }
 
     public AtomParticle FindNearestBondCandidate(AtomParticle source)

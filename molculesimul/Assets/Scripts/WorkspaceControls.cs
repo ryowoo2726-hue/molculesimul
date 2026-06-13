@@ -3,6 +3,7 @@ using UnityEngine;
 public sealed class WorkspaceControls : MonoBehaviour
 {
     [SerializeField] private MoleculeWorkspace workspace;
+    [SerializeField] private MoleculeBuilderController builderController;
     [SerializeField] private MoleculeStatusView statusView;
 
     public void ClearAll()
@@ -11,9 +12,10 @@ public sealed class WorkspaceControls : MonoBehaviour
             return;
 
         workspace.ClearAll();
+        if (builderController != null)
+            builderController.RebuildSlots();
 
         if (statusView != null)
             statusView.Show(null, 0, 0);
     }
 }
-
