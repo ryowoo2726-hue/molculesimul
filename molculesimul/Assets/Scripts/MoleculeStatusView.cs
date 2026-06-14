@@ -17,6 +17,11 @@ public sealed class MoleculeStatusView : MonoBehaviour
         SetText(match.Definition.nameKo, $"{match.Definition.formula} / 원자 {atomCount}개, 결합 {bondCount}개");
     }
 
+    public void ShowMessage(string title, string detail)
+    {
+        SetText(title, detail);
+    }
+
     private void SetText(string title, string detail)
     {
         if (titleText != null)
@@ -26,4 +31,3 @@ public sealed class MoleculeStatusView : MonoBehaviour
             detailText.text = detail;
     }
 }
-

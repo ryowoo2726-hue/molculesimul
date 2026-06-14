@@ -12,6 +12,9 @@ public sealed class MoleculeBuilderController : MonoBehaviour
     [SerializeField] private Transform slotRoot;
     [SerializeField] private Camera targetCamera;
     [SerializeField] private float slotDistance = 0.95f;
+    [SerializeField] private bool restrictToKnownMolecules = true;
+    [SerializeField] private int minDirectionChoices = 6;
+    [SerializeField] private int maxVisibleSlotsPerAtom = 8;
 
     private readonly List<AttachmentSlot> slots = new List<AttachmentSlot>();
     private AttachmentSlot selectedSlot;
@@ -20,20 +23,35 @@ public sealed class MoleculeBuilderController : MonoBehaviour
     private static readonly Vector3[] LinearDirections =
     {
         Vector3.right,
-        Vector3.left
+        Vector3.left,
+        Vector3.up,
+        Vector3.down,
+        Vector3.forward,
+        Vector3.back
     };
 
     private static readonly Vector3[] BentDirections =
     {
         new Vector3(-0.75f, 0.55f, 0f).normalized,
-        new Vector3(0.75f, 0.55f, 0f).normalized
+        new Vector3(0.75f, 0.55f, 0f).normalized,
+        new Vector3(-0.75f, -0.55f, 0f).normalized,
+        new Vector3(0.75f, -0.55f, 0f).normalized,
+        new Vector3(-0.75f, 0f, 0.55f).normalized,
+        new Vector3(0.75f, 0f, 0.55f).normalized,
+        new Vector3(-0.75f, 0f, -0.55f).normalized,
+        new Vector3(0.75f, 0f, -0.55f).normalized
     };
 
     private static readonly Vector3[] TrigonalDirections =
     {
         Vector3.up,
         new Vector3(-0.87f, -0.5f, 0f).normalized,
-        new Vector3(0.87f, -0.5f, 0f).normalized
+        new Vector3(0.87f, -0.5f, 0f).normalized,
+        Vector3.down,
+        new Vector3(-0.87f, 0.5f, 0f).normalized,
+        new Vector3(0.87f, 0.5f, 0f).normalized,
+        new Vector3(0f, 0.5f, 0.87f).normalized,
+        new Vector3(0f, 0.5f, -0.87f).normalized
     };
 
     private static readonly Vector3[] TetrahedralDirections =
@@ -41,7 +59,11 @@ public sealed class MoleculeBuilderController : MonoBehaviour
         new Vector3(1f, 1f, 1f).normalized,
         new Vector3(-1f, -1f, 1f).normalized,
         new Vector3(-1f, 1f, -1f).normalized,
-        new Vector3(1f, -1f, -1f).normalized
+        new Vector3(1f, -1f, -1f).normalized,
+        new Vector3(-1f, 1f, 1f).normalized,
+        new Vector3(1f, -1f, 1f).normalized,
+        new Vector3(1f, 1f, -1f).normalized,
+        new Vector3(-1f, -1f, -1f).normalized
     };
 
     private void Awake()
@@ -78,12 +100,23 @@ public sealed class MoleculeBuilderController : MonoBehaviour
             return;
 
         var parent = selectedSlot.ParentAtom;
+        if (!CanAttachToParent(parent, symbol))
+        {
+            ShowBlockedAttachment(parent, symbol);
+            return;
+        }
+
         var position = selectedSlot.transform.position;
         var newAtom = spawner.SpawnAt(symbol, position);
         if (newAtom == null)
             return;
 
-        workspace.TryCreateBond(parent, newAtom);
+        if (!workspace.TryCreateBond(parent, newAtom))
+        {
+            workspace.DeleteAtom(newAtom);
+            return;
+        }
+
         SelectSlot(null);
         RefreshRecognition(parent);
     }
@@ -123,17 +156,22 @@ public sealed class MoleculeBuilderController : MonoBehaviour
         if (freeSlots == 0)
             return;
 
+        if (ShouldRestrictToDatabase(atom) && recognizer.GetAllowedAttachmentSymbols(workspace, atom).Count == 0)
+            return;
+
+        var createdSlots = 0;
+        var maxChoices = GetVisibleSlotLimit(freeSlots, GetPreferredDirections(atom.Symbol).Length);
         var occupiedDirections = workspace.GetBondDirections(atom);
         foreach (var direction in GetPreferredDirections(atom.Symbol))
         {
-            if (freeSlots <= 0)
+            if (createdSlots >= maxChoices)
                 break;
 
             if (IsDirectionOccupied(direction, occupiedDirections))
                 continue;
 
             CreateSlot(atom, direction);
-            freeSlots--;
+            createdSlots++;
         }
     }
 
@@ -211,6 +249,44 @@ public sealed class MoleculeBuilderController : MonoBehaviour
 
         if (statusView != null)
             statusView.Show(match, focusAtoms.Count, workspace.CountBondsWithin(focusAtoms));
+    }
+
+    private bool CanAttachToParent(AtomParticle parent, string symbol)
+    {
+        if (parent == null)
+            return false;
+
+        if (workspace.GetBondCount(parent) >= GetMaxBonds(parent.Symbol))
+            return false;
+
+        if (!ShouldRestrictToDatabase(parent))
+            return true;
+
+        return recognizer.CanAttachAndRemainPossible(workspace, parent, symbol);
+    }
+
+    private bool ShouldRestrictToDatabase(AtomParticle parent)
+    {
+        if (!restrictToKnownMolecules || recognizer == null || parent == null)
+            return false;
+
+        var focusAtoms = workspace.GetConnectedAtoms(parent);
+        return recognizer.HasPartialCandidate(workspace, focusAtoms);
+    }
+
+    private void ShowBlockedAttachment(AtomParticle parent, string symbol)
+    {
+        if (statusView == null)
+            return;
+
+        var parentSymbol = parent != null ? parent.Symbol : "?";
+        statusView.ShowMessage("이 위치에는 붙일 수 없음", $"{parentSymbol}에 {symbol}를 붙이면 등록된 분자로 완성하기 어려워요.");
+    }
+
+    private int GetVisibleSlotLimit(int freeBonds, int directionCount)
+    {
+        var requested = Mathf.Max(minDirectionChoices, freeBonds * 3 + 2);
+        return Mathf.Min(directionCount, Mathf.Clamp(requested, 1, maxVisibleSlotsPerAtom));
     }
 
     private static bool IsDirectionOccupied(Vector3 direction, IReadOnlyList<Vector3> occupiedDirections)

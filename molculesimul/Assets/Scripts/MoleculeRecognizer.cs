@@ -33,6 +33,72 @@ public sealed class MoleculeRecognizer : MonoBehaviour
         return FindMatch(workspace, workspace.Atoms);
     }
 
+    public bool HasPartialCandidate(MoleculeWorkspace workspace, IReadOnlyList<AtomParticle> atoms)
+    {
+        if (workspace == null || atoms == null || atoms.Count == 0 || database == null || database.molecules == null)
+            return false;
+
+        var symbols = new string[atoms.Count];
+        for (var i = 0; i < atoms.Count; i++)
+            symbols[i] = atoms[i].Symbol;
+
+        return HasCompatiblePartialDefinition(symbols, workspace.BuildAdjacency(atoms));
+    }
+
+    public bool CanAttachAndRemainPossible(MoleculeWorkspace workspace, AtomParticle parent, string newSymbol)
+    {
+        if (workspace == null || parent == null || string.IsNullOrEmpty(newSymbol) || database == null || database.molecules == null)
+            return true;
+
+        var atoms = workspace.GetConnectedAtoms(parent);
+        var parentIndex = atoms.IndexOf(parent);
+        if (parentIndex < 0)
+            return true;
+
+        var symbols = new string[atoms.Count + 1];
+        for (var i = 0; i < atoms.Count; i++)
+            symbols[i] = atoms[i].Symbol;
+        symbols[symbols.Length - 1] = newSymbol;
+
+        var existingAdjacency = workspace.BuildAdjacency(atoms);
+        var adjacency = new int[symbols.Length, symbols.Length];
+        for (var y = 0; y < existingAdjacency.GetLength(0); y++)
+        {
+            for (var x = 0; x < existingAdjacency.GetLength(1); x++)
+                adjacency[y, x] = existingAdjacency[y, x];
+        }
+
+        var newIndex = symbols.Length - 1;
+        adjacency[parentIndex, newIndex] = 1;
+        adjacency[newIndex, parentIndex] = 1;
+
+        return HasCompatiblePartialDefinition(symbols, adjacency);
+    }
+
+    public HashSet<string> GetAllowedAttachmentSymbols(MoleculeWorkspace workspace, AtomParticle parent)
+    {
+        var allowed = new HashSet<string>();
+        if (workspace == null || parent == null || database == null || database.molecules == null)
+            return allowed;
+
+        foreach (var definition in database.molecules)
+        {
+            if (definition.atoms == null)
+                continue;
+
+            foreach (var symbol in definition.atoms)
+            {
+                if (allowed.Contains(symbol))
+                    continue;
+
+                if (CanAttachAndRemainPossible(workspace, parent, symbol))
+                    allowed.Add(symbol);
+            }
+        }
+
+        return allowed;
+    }
+
     public MoleculeMatch FindMatch(MoleculeWorkspace workspace, IReadOnlyList<AtomParticle> atoms)
     {
         if (atoms.Count == 0 || database == null || database.molecules == null)
@@ -71,6 +137,30 @@ public sealed class MoleculeRecognizer : MonoBehaviour
         return null;
     }
 
+    private bool HasCompatiblePartialDefinition(string[] partialSymbols, int[,] partialAdjacency)
+    {
+        foreach (var definition in database.molecules)
+        {
+            if (definition.atoms == null || definition.atoms.Length < partialSymbols.Length)
+                continue;
+
+            if (!HasEnoughAtomCounts(definition, partialSymbols))
+                continue;
+
+            var definitionAdjacency = BuildDefinitionAdjacency(definition);
+            var order = BuildPartialMappingOrder(partialSymbols, partialAdjacency);
+            var partialToDefinition = new int[partialSymbols.Length];
+            for (var i = 0; i < partialToDefinition.Length; i++)
+                partialToDefinition[i] = -1;
+
+            var usedDefinitionAtoms = new bool[definition.atoms.Length];
+            if (TryMapPartial(0, order, partialSymbols, partialAdjacency, definition, definitionAdjacency, partialToDefinition, usedDefinitionAtoms))
+                return true;
+        }
+
+        return false;
+    }
+
     private static bool HasSameAtomCounts(MoleculeDefinition definition, IReadOnlyList<AtomParticle> atoms)
     {
         var counts = new Dictionary<string, int>();
@@ -95,6 +185,44 @@ public sealed class MoleculeRecognizer : MonoBehaviour
         }
 
         return true;
+    }
+
+    private static bool HasEnoughAtomCounts(MoleculeDefinition definition, IReadOnlyList<string> symbols)
+    {
+        var counts = new Dictionary<string, int>();
+        foreach (var symbol in definition.atoms)
+        {
+            if (!counts.ContainsKey(symbol))
+                counts[symbol] = 0;
+            counts[symbol]++;
+        }
+
+        foreach (var symbol in symbols)
+        {
+            if (!counts.TryGetValue(symbol, out var count) || count == 0)
+                return false;
+            counts[symbol] = count - 1;
+        }
+
+        return true;
+    }
+
+    private static int[] BuildPartialMappingOrder(string[] partialSymbols, int[,] partialAdjacency)
+    {
+        var order = new int[partialSymbols.Length];
+        for (var i = 0; i < order.Length; i++)
+            order[i] = i;
+
+        System.Array.Sort(order, (a, b) =>
+        {
+            var degreeCompare = CountDegree(partialAdjacency, b).CompareTo(CountDegree(partialAdjacency, a));
+            if (degreeCompare != 0)
+                return degreeCompare;
+
+            return string.CompareOrdinal(partialSymbols[a], partialSymbols[b]);
+        });
+
+        return order;
     }
 
     private static bool TryMap(
@@ -131,6 +259,47 @@ public sealed class MoleculeRecognizer : MonoBehaviour
         return false;
     }
 
+    private static bool TryMapPartial(
+        int orderIndex,
+        int[] order,
+        string[] partialSymbols,
+        int[,] partialAdjacency,
+        MoleculeDefinition definition,
+        int[,] definitionAdjacency,
+        int[] partialToDefinition,
+        bool[] usedDefinitionAtoms)
+    {
+        if (orderIndex >= order.Length)
+            return true;
+
+        var partialIndex = order[orderIndex];
+        var symbol = partialSymbols[partialIndex];
+        var partialDegree = CountDegree(partialAdjacency, partialIndex);
+
+        for (var definitionIndex = 0; definitionIndex < definition.atoms.Length; definitionIndex++)
+        {
+            if (usedDefinitionAtoms[definitionIndex] || definition.atoms[definitionIndex] != symbol)
+                continue;
+
+            if (CountDegree(definitionAdjacency, definitionIndex) < partialDegree)
+                continue;
+
+            if (!IsPartialCompatible(partialIndex, definitionIndex, partialAdjacency, definitionAdjacency, partialToDefinition))
+                continue;
+
+            partialToDefinition[partialIndex] = definitionIndex;
+            usedDefinitionAtoms[definitionIndex] = true;
+
+            if (TryMapPartial(orderIndex + 1, order, partialSymbols, partialAdjacency, definition, definitionAdjacency, partialToDefinition, usedDefinitionAtoms))
+                return true;
+
+            partialToDefinition[partialIndex] = -1;
+            usedDefinitionAtoms[definitionIndex] = false;
+        }
+
+        return false;
+    }
+
     private static bool IsCompatible(
         int definitionIndex,
         int currentIndex,
@@ -151,6 +320,40 @@ public sealed class MoleculeRecognizer : MonoBehaviour
         }
 
         return true;
+    }
+
+    private static bool IsPartialCompatible(
+        int partialIndex,
+        int definitionIndex,
+        int[,] partialAdjacency,
+        int[,] definitionAdjacency,
+        int[] partialToDefinition)
+    {
+        for (var previousPartialIndex = 0; previousPartialIndex < partialToDefinition.Length; previousPartialIndex++)
+        {
+            var previousDefinitionIndex = partialToDefinition[previousPartialIndex];
+            if (previousDefinitionIndex < 0)
+                continue;
+
+            if (partialAdjacency[partialIndex, previousPartialIndex] == 1 &&
+                definitionAdjacency[definitionIndex, previousDefinitionIndex] != 1)
+                return false;
+        }
+
+        return true;
+    }
+
+    private static int CountDegree(int[,] adjacency, int index)
+    {
+        var degree = 0;
+        var count = adjacency.GetLength(0);
+        for (var i = 0; i < count; i++)
+        {
+            if (adjacency[index, i] == 1)
+                degree++;
+        }
+
+        return degree;
     }
 
     private static int[,] BuildDefinitionAdjacency(MoleculeDefinition definition)
