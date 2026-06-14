@@ -156,7 +156,7 @@ public sealed class MoleculeBuilderController : MonoBehaviour
         if (freeSlots == 0)
             return;
 
-        if (ShouldRestrictToDatabase(atom) && recognizer.GetAllowedAttachmentSymbols(workspace, atom).Count == 0)
+        if (UsesDatabaseGuidance(atom) && recognizer.GetAllowedAttachmentSymbols(workspace, atom).Count == 0)
             return;
 
         var createdSlots = 0;
@@ -259,19 +259,18 @@ public sealed class MoleculeBuilderController : MonoBehaviour
         if (workspace.GetBondCount(parent) >= GetMaxBonds(parent.Symbol))
             return false;
 
-        if (!ShouldRestrictToDatabase(parent))
+        if (!UsesDatabaseGuidance(parent))
             return true;
 
         return recognizer.CanAttachAndRemainPossible(workspace, parent, symbol);
     }
 
-    private bool ShouldRestrictToDatabase(AtomParticle parent)
+    private bool UsesDatabaseGuidance(AtomParticle parent)
     {
         if (!restrictToKnownMolecules || recognizer == null || parent == null)
             return false;
 
-        var focusAtoms = workspace.GetConnectedAtoms(parent);
-        return recognizer.HasPartialCandidate(workspace, focusAtoms);
+        return true;
     }
 
     private void ShowBlockedAttachment(AtomParticle parent, string symbol)
