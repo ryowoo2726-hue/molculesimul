@@ -15,6 +15,7 @@ public sealed class MoleculePresetDropdown : MonoBehaviour
 
     private readonly List<MoleculeDefinition> definitions = new List<MoleculeDefinition>();
     private bool populating;
+    private Font optionFont;
 
     private void Awake()
     {
@@ -23,11 +24,18 @@ public sealed class MoleculePresetDropdown : MonoBehaviour
 
         if (moleculeJson == null)
             moleculeJson = Resources.Load<TextAsset>("molecules");
+
+        optionFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
     }
 
     private void Start()
     {
         PopulateOptions();
+    }
+
+    private void LateUpdate()
+    {
+        FixOpenDropdownText();
     }
 
     private void OnEnable()
@@ -75,7 +83,32 @@ public sealed class MoleculePresetDropdown : MonoBehaviour
         dropdown.AddOptions(options);
         dropdown.SetValueWithoutNotify(0);
         dropdown.RefreshShownValue();
+        FixTemplateText(dropdown.captionText, new Color(0.05f, 0.07f, 0.09f));
+        FixTemplateText(dropdown.itemText, Color.white);
         populating = false;
+    }
+
+    private void FixOpenDropdownText()
+    {
+        var list = GameObject.Find("Dropdown List");
+        if (list == null)
+            return;
+
+        foreach (var text in list.GetComponentsInChildren<Text>(true))
+            FixTemplateText(text, Color.white);
+    }
+
+    private void FixTemplateText(Text text, Color color)
+    {
+        if (text == null)
+            return;
+
+        if (text.font == null && optionFont != null)
+            text.font = optionFont;
+
+        text.color = color;
+        text.enabled = true;
+        text.raycastTarget = false;
     }
 
     private void LoadSelectedMolecule(int optionIndex)

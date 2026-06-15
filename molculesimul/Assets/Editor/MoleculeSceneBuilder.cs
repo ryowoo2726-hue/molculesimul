@@ -347,6 +347,13 @@ public static class MoleculeSceneBuilder
         var itemToggle = itemObject.AddComponent<Toggle>();
         itemToggle.targetGraphic = itemObject.AddComponent<Image>();
         itemToggle.targetGraphic.color = new Color(0.1f, 0.14f, 0.18f, 0.96f);
+        var itemColors = itemToggle.colors;
+        itemColors.normalColor = new Color(0.1f, 0.14f, 0.18f, 0.96f);
+        itemColors.highlightedColor = new Color(0.18f, 0.26f, 0.34f, 1f);
+        itemColors.selectedColor = new Color(0.14f, 0.2f, 0.28f, 1f);
+        itemColors.pressedColor = new Color(0.25f, 0.34f, 0.42f, 1f);
+        itemColors.disabledColor = new Color(0.08f, 0.1f, 0.12f, 0.8f);
+        itemToggle.colors = itemColors;
         var itemLayout = itemObject.AddComponent<LayoutElement>();
         itemLayout.preferredHeight = 46f;
 
