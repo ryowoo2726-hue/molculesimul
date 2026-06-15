@@ -287,8 +287,12 @@ public static class MoleculeSceneBuilder
         var image = go.AddComponent<Image>();
         image.color = new Color(0.94f, 0.96f, 0.98f, 0.97f);
 
-        var dropdown = go.AddComponent<Dropdown>();
-        dropdown.targetGraphic = image;
+        var toggleButton = go.AddComponent<Button>();
+        toggleButton.targetGraphic = image;
+        var buttonColors = toggleButton.colors;
+        buttonColors.highlightedColor = new Color(1f, 1f, 1f, 1f);
+        buttonColors.pressedColor = new Color(0.82f, 0.88f, 0.94f, 1f);
+        toggleButton.colors = buttonColors;
 
         var caption = CreateText("Label", go.transform, "분자모형 불러오기", 22, FontStyle.Bold, TextAnchor.MiddleLeft);
         caption.color = new Color(0.05f, 0.07f, 0.09f);
@@ -303,39 +307,48 @@ public static class MoleculeSceneBuilder
         arrow.color = new Color(0.05f, 0.07f, 0.09f);
         SetRect(arrow.rectTransform, new Vector2(-26f, 0f), new Vector2(32f, 38f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
 
-        var template = CreateDropdownTemplate(go.transform);
-        dropdown.template = template;
-        dropdown.captionText = caption;
-        dropdown.itemText = template.GetComponentInChildren<Toggle>(true).GetComponentInChildren<Text>(true);
+        var listPanel = CreatePresetListPanel(go.transform, out var scrollRect, out var contentRoot, out var optionButtonTemplate);
 
         var loader = go.AddComponent<MoleculePresetDropdown>();
-        SetField(loader, "dropdown", dropdown);
+        SetField(loader, "toggleButton", toggleButton);
+        SetField(loader, "captionText", caption);
+        SetField(loader, "listPanel", listPanel);
+        SetField(loader, "contentRoot", contentRoot);
+        SetField(loader, "optionButtonPrefab", optionButtonTemplate);
+        SetField(loader, "scrollRect", scrollRect);
         return loader;
     }
 
-    private static RectTransform CreateDropdownTemplate(Transform parent)
+    private static RectTransform CreatePresetListPanel(Transform parent, out ScrollRect scrollRect, out Transform contentRoot, out Button optionButtonTemplate)
     {
-        var templateObject = CreateUiObject("Template", parent, Vector2.zero, new Vector2(0f, 300f), new Vector2(0f, 0f), new Vector2(1f, 0f));
-        var templateRect = templateObject.GetComponent<RectTransform>();
-        templateRect.pivot = new Vector2(0.5f, 1f);
-        templateRect.anchoredPosition = new Vector2(0f, -4f);
-        var templateImage = templateObject.AddComponent<Image>();
-        templateImage.color = new Color(0.02f, 0.025f, 0.03f, 0.96f);
-        var scrollRect = templateObject.AddComponent<ScrollRect>();
+        var panelObject = CreateUiObject("PresetListPanel", parent, Vector2.zero, new Vector2(0f, 330f), new Vector2(0f, 0f), new Vector2(1f, 0f));
+        var panelRect = panelObject.GetComponent<RectTransform>();
+        panelRect.pivot = new Vector2(0.5f, 1f);
+        panelRect.anchoredPosition = new Vector2(0f, -4f);
+        panelRect.sizeDelta = new Vector2(0f, 330f);
+        var panelImage = panelObject.AddComponent<Image>();
+        panelImage.color = new Color(0.02f, 0.025f, 0.03f, 0.98f);
+        scrollRect = panelObject.AddComponent<ScrollRect>();
         scrollRect.horizontal = false;
+        scrollRect.vertical = true;
+        scrollRect.inertia = true;
         scrollRect.movementType = ScrollRect.MovementType.Clamped;
+        scrollRect.scrollSensitivity = 34f;
 
-        var viewportObject = CreateUiObject("Viewport", templateObject.transform, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.one);
+        var viewportObject = CreateUiObject("Viewport", panelObject.transform, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.one);
         var viewportImage = viewportObject.AddComponent<Image>();
         viewportImage.color = new Color(1f, 1f, 1f, 0.05f);
         viewportObject.AddComponent<Mask>().showMaskGraphic = false;
         viewportObject.GetComponent<RectTransform>().offsetMin = Vector2.zero;
-        viewportObject.GetComponent<RectTransform>().offsetMax = Vector2.zero;
+        viewportObject.GetComponent<RectTransform>().offsetMax = new Vector2(-22f, 0f);
 
-        var contentObject = CreateUiObject("Content", viewportObject.transform, Vector2.zero, new Vector2(430f, 300f), new Vector2(0f, 1f), new Vector2(1f, 1f));
+        var contentObject = CreateUiObject("Content", viewportObject.transform, Vector2.zero, Vector2.zero, new Vector2(0f, 1f), new Vector2(1f, 1f));
         var contentRect = contentObject.GetComponent<RectTransform>();
         contentRect.pivot = new Vector2(0.5f, 1f);
+        contentRect.anchoredPosition = Vector2.zero;
         var layout = contentObject.AddComponent<VerticalLayoutGroup>();
+        layout.padding = new RectOffset(6, 6, 6, 6);
+        layout.spacing = 4f;
         layout.childControlHeight = false;
         layout.childControlWidth = true;
         layout.childForceExpandHeight = false;
@@ -343,19 +356,22 @@ public static class MoleculeSceneBuilder
         var fitter = contentObject.AddComponent<ContentSizeFitter>();
         fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-        var itemObject = CreateUiObject("Item", contentObject.transform, Vector2.zero, new Vector2(430f, 46f), new Vector2(0f, 1f), new Vector2(1f, 1f));
-        var itemToggle = itemObject.AddComponent<Toggle>();
-        itemToggle.targetGraphic = itemObject.AddComponent<Image>();
-        itemToggle.targetGraphic.color = new Color(0.1f, 0.14f, 0.18f, 0.96f);
-        var itemColors = itemToggle.colors;
-        itemColors.normalColor = new Color(0.1f, 0.14f, 0.18f, 0.96f);
+        var itemObject = CreateUiObject("OptionButtonTemplate", contentObject.transform, Vector2.zero, new Vector2(0f, 48f), new Vector2(0f, 1f), new Vector2(1f, 1f));
+        var itemImage = itemObject.AddComponent<Image>();
+        itemImage.color = new Color(0.1f, 0.14f, 0.18f, 0.98f);
+        optionButtonTemplate = itemObject.AddComponent<Button>();
+        optionButtonTemplate.targetGraphic = itemImage;
+        var itemColors = optionButtonTemplate.colors;
+        itemColors.normalColor = new Color(0.1f, 0.14f, 0.18f, 0.98f);
         itemColors.highlightedColor = new Color(0.18f, 0.26f, 0.34f, 1f);
         itemColors.selectedColor = new Color(0.14f, 0.2f, 0.28f, 1f);
         itemColors.pressedColor = new Color(0.25f, 0.34f, 0.42f, 1f);
         itemColors.disabledColor = new Color(0.08f, 0.1f, 0.12f, 0.8f);
-        itemToggle.colors = itemColors;
+        optionButtonTemplate.colors = itemColors;
         var itemLayout = itemObject.AddComponent<LayoutElement>();
-        itemLayout.preferredHeight = 46f;
+        itemLayout.minHeight = 46f;
+        itemLayout.preferredHeight = 48f;
+        itemLayout.flexibleHeight = 0f;
 
         var itemText = CreateText("Item Label", itemObject.transform, "Option", 20, FontStyle.Normal, TextAnchor.MiddleLeft);
         itemText.color = Color.white;
@@ -366,10 +382,30 @@ public static class MoleculeSceneBuilder
         itemText.rectTransform.offsetMin = new Vector2(16f, 0f);
         itemText.rectTransform.offsetMax = new Vector2(-16f, 0f);
 
+        var scrollbarObject = CreateUiObject("Scrollbar", panelObject.transform, new Vector2(-3f, 0f), new Vector2(16f, 0f), new Vector2(1f, 0f), new Vector2(1f, 1f));
+        var scrollbarImage = scrollbarObject.AddComponent<Image>();
+        scrollbarImage.color = new Color(0.12f, 0.16f, 0.2f, 0.7f);
+        var scrollbar = scrollbarObject.AddComponent<Scrollbar>();
+        scrollbar.direction = Scrollbar.Direction.BottomToTop;
+
+        var slidingArea = CreateUiObject("Sliding Area", scrollbarObject.transform, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.one);
+        slidingArea.GetComponent<RectTransform>().offsetMin = new Vector2(2f, 2f);
+        slidingArea.GetComponent<RectTransform>().offsetMax = new Vector2(-2f, -2f);
+
+        var handleObject = CreateUiObject("Handle", slidingArea.transform, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.one);
+        var handleImage = handleObject.AddComponent<Image>();
+        handleImage.color = new Color(0.72f, 0.84f, 0.95f, 0.95f);
+        scrollbar.handleRect = handleObject.GetComponent<RectTransform>();
+        scrollbar.targetGraphic = handleImage;
+
         scrollRect.viewport = viewportObject.GetComponent<RectTransform>();
         scrollRect.content = contentRect;
-        templateObject.SetActive(false);
-        return templateRect;
+        scrollRect.verticalScrollbar = scrollbar;
+        scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+        contentRoot = contentObject.transform;
+        itemObject.SetActive(false);
+        panelObject.SetActive(false);
+        return panelRect;
     }
 
     private static void CreateElementButtons(Transform parent, AtomSpawner spawner, ElementLibrary library)

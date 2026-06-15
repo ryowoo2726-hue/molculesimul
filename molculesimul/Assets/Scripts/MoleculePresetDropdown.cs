@@ -4,7 +4,12 @@ using UnityEngine.UI;
 
 public sealed class MoleculePresetDropdown : MonoBehaviour
 {
-    [SerializeField] private Dropdown dropdown;
+    [SerializeField] private Button toggleButton;
+    [SerializeField] private Text captionText;
+    [SerializeField] private RectTransform listPanel;
+    [SerializeField] private Transform contentRoot;
+    [SerializeField] private Button optionButtonPrefab;
+    [SerializeField] private ScrollRect scrollRect;
     [SerializeField] private MoleculeWorkspace workspace;
     [SerializeField] private AtomSpawner spawner;
     [SerializeField] private MoleculeRecognizer recognizer;
@@ -14,18 +19,29 @@ public sealed class MoleculePresetDropdown : MonoBehaviour
     [SerializeField] private float layoutScale = 1.15f;
 
     private readonly List<MoleculeDefinition> definitions = new List<MoleculeDefinition>();
-    private bool populating;
+    private readonly List<Button> optionButtons = new List<Button>();
     private Font optionFont;
+    private bool isOpen;
 
     private void Awake()
     {
-        if (dropdown == null)
-            dropdown = GetComponent<Dropdown>();
+        if (toggleButton == null)
+            toggleButton = GetComponent<Button>();
+
+        if (captionText == null)
+            captionText = GetComponentInChildren<Text>(true);
 
         if (moleculeJson == null)
             moleculeJson = Resources.Load<TextAsset>("molecules");
 
-        optionFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        optionFont = captionText != null && captionText.font != null
+            ? captionText.font
+            : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+        if (optionButtonPrefab != null)
+            optionButtonPrefab.gameObject.SetActive(false);
+
+        SetListVisible(false);
     }
 
     private void Start()
@@ -33,36 +49,28 @@ public sealed class MoleculePresetDropdown : MonoBehaviour
         PopulateOptions();
     }
 
-    private void LateUpdate()
+    private void Update()
     {
-        FixOpenDropdownText();
+        if (isOpen && Input.GetKeyDown(KeyCode.Escape))
+            SetListVisible(false);
     }
 
     private void OnEnable()
     {
-        if (dropdown != null)
-            dropdown.onValueChanged.AddListener(LoadSelectedMolecule);
+        if (toggleButton != null)
+            toggleButton.onClick.AddListener(ToggleList);
     }
 
     private void OnDisable()
     {
-        if (dropdown != null)
-            dropdown.onValueChanged.RemoveListener(LoadSelectedMolecule);
+        if (toggleButton != null)
+            toggleButton.onClick.RemoveListener(ToggleList);
     }
 
     private void PopulateOptions()
     {
-        if (dropdown == null)
-            return;
-
-        populating = true;
+        ClearOptionButtons();
         definitions.Clear();
-        dropdown.ClearOptions();
-
-        var options = new List<Dropdown.OptionData>
-        {
-            new Dropdown.OptionData("분자모형 불러오기")
-        };
 
         var database = moleculeJson != null
             ? JsonUtility.FromJson<MoleculeDatabase>(moleculeJson.text)
@@ -76,29 +84,87 @@ public sealed class MoleculePresetDropdown : MonoBehaviour
                     continue;
 
                 definitions.Add(definition);
-                options.Add(new Dropdown.OptionData($"{definition.nameKo} ({definition.formula})"));
+                CreateOptionButton(definition, definitions.Count - 1);
             }
         }
 
-        dropdown.AddOptions(options);
-        dropdown.SetValueWithoutNotify(0);
-        dropdown.RefreshShownValue();
-        FixTemplateText(dropdown.captionText, new Color(0.05f, 0.07f, 0.09f));
-        FixTemplateText(dropdown.itemText, Color.white);
-        populating = false;
+        SetCaption(definitions.Count > 0 ? "분자모형 불러오기" : "분자 데이터 없음");
+        RebuildListLayout();
     }
 
-    private void FixOpenDropdownText()
+    private void CreateOptionButton(MoleculeDefinition definition, int definitionIndex)
     {
-        var list = GameObject.Find("Dropdown List");
-        if (list == null)
+        if (contentRoot == null || optionButtonPrefab == null)
             return;
 
-        foreach (var text in list.GetComponentsInChildren<Text>(true))
-            FixTemplateText(text, Color.white);
+        var optionButton = Instantiate(optionButtonPrefab, contentRoot);
+        optionButton.name = string.IsNullOrEmpty(definition.id)
+            ? $"Option_{definitionIndex + 1}"
+            : $"Option_{definition.id}";
+        optionButton.gameObject.SetActive(true);
+        optionButton.onClick.RemoveAllListeners();
+        optionButton.onClick.AddListener(() => SelectDefinition(definitionIndex));
+
+        var image = optionButton.GetComponent<Image>();
+        if (image != null)
+            image.color = new Color(0.1f, 0.14f, 0.18f, 0.98f);
+
+        var label = optionButton.GetComponentInChildren<Text>(true);
+        if (label != null)
+        {
+            label.text = $"{definition.nameKo} ({definition.formula})";
+            ConfigureText(label, Color.white);
+        }
+
+        optionButtons.Add(optionButton);
     }
 
-    private void FixTemplateText(Text text, Color color)
+    private void SelectDefinition(int definitionIndex)
+    {
+        if (definitionIndex < 0 || definitionIndex >= definitions.Count)
+            return;
+
+        var definition = definitions[definitionIndex];
+        SetCaption($"{definition.nameKo} ({definition.formula})");
+        SetListVisible(false);
+        LoadMolecule(definition);
+    }
+
+    private void ToggleList()
+    {
+        SetListVisible(!isOpen);
+    }
+
+    private void SetListVisible(bool visible)
+    {
+        isOpen = visible;
+
+        if (listPanel != null)
+            listPanel.gameObject.SetActive(visible);
+
+        if (!visible)
+            return;
+
+        transform.SetAsLastSibling();
+        RebuildListLayout();
+
+        if (scrollRect != null)
+        {
+            Canvas.ForceUpdateCanvases();
+            scrollRect.verticalNormalizedPosition = 1f;
+        }
+    }
+
+    private void SetCaption(string value)
+    {
+        if (captionText == null)
+            return;
+
+        captionText.text = value;
+        ConfigureText(captionText, new Color(0.05f, 0.07f, 0.09f));
+    }
+
+    private void ConfigureText(Text text, Color color)
     {
         if (text == null)
             return;
@@ -111,13 +177,21 @@ public sealed class MoleculePresetDropdown : MonoBehaviour
         text.raycastTarget = false;
     }
 
-    private void LoadSelectedMolecule(int optionIndex)
+    private void ClearOptionButtons()
     {
-        if (populating || optionIndex <= 0 || optionIndex > definitions.Count)
-            return;
+        for (var i = optionButtons.Count - 1; i >= 0; i--)
+        {
+            if (optionButtons[i] != null)
+                Destroy(optionButtons[i].gameObject);
+        }
 
-        var definition = definitions[optionIndex - 1];
-        LoadMolecule(definition);
+        optionButtons.Clear();
+    }
+
+    private void RebuildListLayout()
+    {
+        if (contentRoot is RectTransform contentRect)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
     }
 
     private void LoadMolecule(MoleculeDefinition definition)
