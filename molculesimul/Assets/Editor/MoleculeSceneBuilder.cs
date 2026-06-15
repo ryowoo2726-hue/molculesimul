@@ -45,6 +45,7 @@ public static class MoleculeSceneBuilder
         var slotRoot = new GameObject("AttachmentSlots").transform;
         var canvas = CreateCanvas();
         var statusView = CreateStatusPanel(canvas.transform);
+        var presetDropdown = CreateMoleculePresetDropdown(canvas.transform);
 
         SetField(workspace, "bondPrefab", bondPrefab);
         SetField(spawner, "elementLibrary", elementLibrary);
@@ -67,6 +68,11 @@ public static class MoleculeSceneBuilder
         SetField(controls, "workspace", workspace);
         SetField(controls, "builderController", builder);
         SetField(controls, "statusView", statusView);
+        SetField(presetDropdown, "workspace", workspace);
+        SetField(presetDropdown, "spawner", spawner);
+        SetField(presetDropdown, "recognizer", recognizer);
+        SetField(presetDropdown, "statusView", statusView);
+        SetField(presetDropdown, "builderController", builder);
 
         CreateElementButtons(canvas.transform, spawner, elementLibrary);
         CreateActionButtons(canvas.transform, dragger, controls);
@@ -273,6 +279,90 @@ public static class MoleculeSceneBuilder
         SetField(view, "titleText", title);
         SetField(view, "detailText", detail);
         return view;
+    }
+
+    private static MoleculePresetDropdown CreateMoleculePresetDropdown(Transform parent)
+    {
+        var go = CreateUiObject("MoleculePresetDropdown", parent, new Vector2(24f, -158f), new Vector2(430f, 54f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+        var image = go.AddComponent<Image>();
+        image.color = new Color(0.94f, 0.96f, 0.98f, 0.97f);
+
+        var dropdown = go.AddComponent<Dropdown>();
+        dropdown.targetGraphic = image;
+
+        var caption = CreateText("Label", go.transform, "분자모형 불러오기", 22, FontStyle.Bold, TextAnchor.MiddleLeft);
+        caption.color = new Color(0.05f, 0.07f, 0.09f);
+        caption.resizeTextForBestFit = true;
+        caption.resizeTextMinSize = 15;
+        caption.resizeTextMaxSize = 22;
+        SetRect(caption.rectTransform, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.one);
+        caption.rectTransform.offsetMin = new Vector2(18f, 0f);
+        caption.rectTransform.offsetMax = new Vector2(-52f, 0f);
+
+        var arrow = CreateText("Arrow", go.transform, "v", 24, FontStyle.Bold, TextAnchor.MiddleCenter);
+        arrow.color = new Color(0.05f, 0.07f, 0.09f);
+        SetRect(arrow.rectTransform, new Vector2(-26f, 0f), new Vector2(32f, 38f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+
+        var template = CreateDropdownTemplate(go.transform);
+        dropdown.template = template;
+        dropdown.captionText = caption;
+        dropdown.itemText = template.GetComponentInChildren<Toggle>(true).GetComponentInChildren<Text>(true);
+
+        var loader = go.AddComponent<MoleculePresetDropdown>();
+        SetField(loader, "dropdown", dropdown);
+        return loader;
+    }
+
+    private static RectTransform CreateDropdownTemplate(Transform parent)
+    {
+        var templateObject = CreateUiObject("Template", parent, Vector2.zero, new Vector2(0f, 300f), new Vector2(0f, 0f), new Vector2(1f, 0f));
+        var templateRect = templateObject.GetComponent<RectTransform>();
+        templateRect.pivot = new Vector2(0.5f, 1f);
+        templateRect.anchoredPosition = new Vector2(0f, -4f);
+        var templateImage = templateObject.AddComponent<Image>();
+        templateImage.color = new Color(0.02f, 0.025f, 0.03f, 0.96f);
+        var scrollRect = templateObject.AddComponent<ScrollRect>();
+        scrollRect.horizontal = false;
+        scrollRect.movementType = ScrollRect.MovementType.Clamped;
+
+        var viewportObject = CreateUiObject("Viewport", templateObject.transform, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.one);
+        var viewportImage = viewportObject.AddComponent<Image>();
+        viewportImage.color = new Color(1f, 1f, 1f, 0.05f);
+        viewportObject.AddComponent<Mask>().showMaskGraphic = false;
+        viewportObject.GetComponent<RectTransform>().offsetMin = Vector2.zero;
+        viewportObject.GetComponent<RectTransform>().offsetMax = Vector2.zero;
+
+        var contentObject = CreateUiObject("Content", viewportObject.transform, Vector2.zero, new Vector2(430f, 300f), new Vector2(0f, 1f), new Vector2(1f, 1f));
+        var contentRect = contentObject.GetComponent<RectTransform>();
+        contentRect.pivot = new Vector2(0.5f, 1f);
+        var layout = contentObject.AddComponent<VerticalLayoutGroup>();
+        layout.childControlHeight = false;
+        layout.childControlWidth = true;
+        layout.childForceExpandHeight = false;
+        layout.childForceExpandWidth = true;
+        var fitter = contentObject.AddComponent<ContentSizeFitter>();
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        var itemObject = CreateUiObject("Item", contentObject.transform, Vector2.zero, new Vector2(430f, 46f), new Vector2(0f, 1f), new Vector2(1f, 1f));
+        var itemToggle = itemObject.AddComponent<Toggle>();
+        itemToggle.targetGraphic = itemObject.AddComponent<Image>();
+        itemToggle.targetGraphic.color = new Color(0.1f, 0.14f, 0.18f, 0.96f);
+        var itemLayout = itemObject.AddComponent<LayoutElement>();
+        itemLayout.preferredHeight = 46f;
+
+        var itemText = CreateText("Item Label", itemObject.transform, "Option", 20, FontStyle.Normal, TextAnchor.MiddleLeft);
+        itemText.color = Color.white;
+        itemText.resizeTextForBestFit = true;
+        itemText.resizeTextMinSize = 14;
+        itemText.resizeTextMaxSize = 20;
+        SetRect(itemText.rectTransform, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.one);
+        itemText.rectTransform.offsetMin = new Vector2(16f, 0f);
+        itemText.rectTransform.offsetMax = new Vector2(-16f, 0f);
+
+        scrollRect.viewport = viewportObject.GetComponent<RectTransform>();
+        scrollRect.content = contentRect;
+        templateObject.SetActive(false);
+        return templateRect;
     }
 
     private static void CreateElementButtons(Transform parent, AtomSpawner spawner, ElementLibrary library)
